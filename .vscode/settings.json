@@ -26,5 +26,6 @@
         "javax",
         "jakarta",
         "#"
-    ]
+    ],
+    "java.debug.settings.onBuildFailureProceed": true
 }

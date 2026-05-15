@@ -381,10 +381,28 @@ public class GenericDao<T> implements CrudRepository<T> {
     }
 
     private void setFieldFromDbValue(T entity, Field f, Object dbValue, int depth, Map<Pair, Object> cache) throws Exception {
-        if (f.isAnnotationPresent(ManyToOne.class) || isEntity(f.getType())) {
+        if (f.isAnnotationPresent(ManyToOne.class)) {
+            if (isEntity(f.getType())) {
+                GenericDao<?> targetDao = new GenericDao<>(f.getType());
+                Object related = targetDao.findById(dbValue, depth, cache);
+                f.set(entity, related);
+            } else {
+                if (dbValue == null) {
+                    return;
+                }
+                if (f.getType() == int.class || f.getType() == Integer.class) {
+                    f.set(entity, ((Number) dbValue).intValue());
+                } else if (f.getType() == long.class || f.getType() == Long.class) {
+                    f.set(entity, ((Number) dbValue).longValue());
+                } else if (f.getType() == String.class) {
+                    f.set(entity, dbValue.toString());
+                } else {
+                    f.set(entity, dbValue);
+                }
+            }
+        } else if (isEntity(f.getType())) {
             if (dbValue != null) {
-                Class<?> targetClass = f.getType();
-                GenericDao<?> targetDao = new GenericDao<>(targetClass);
+                GenericDao<?> targetDao = new GenericDao<>(f.getType());
                 Object related = targetDao.findById(dbValue, depth, cache);
                 f.set(entity, related);
             }
@@ -401,6 +419,22 @@ public class GenericDao<T> implements CrudRepository<T> {
                 int ordinal = ((Number) dbValue).intValue();
                 Object[] constants = f.getType().getEnumConstants();
                 f.set(entity, constants[ordinal]);
+            }
+        } else if (f.getType() == java.time.LocalDate.class) {
+            if (dbValue instanceof java.sql.Date sqlDate) {
+                f.set(entity, sqlDate.toLocalDate());
+            } else if (dbValue instanceof java.sql.Timestamp timestamp) {
+                f.set(entity, timestamp.toLocalDateTime().toLocalDate());
+            } else if (dbValue != null) {
+                f.set(entity, java.time.LocalDate.parse(dbValue.toString()));
+            }
+        } else if (f.getType() == java.time.LocalDateTime.class) {
+            if (dbValue instanceof java.sql.Timestamp timestamp) {
+                f.set(entity, timestamp.toLocalDateTime());
+            } else if (dbValue instanceof java.sql.Date sqlDate) {
+                f.set(entity, sqlDate.toLocalDate().atStartOfDay());
+            } else if (dbValue != null) {
+                f.set(entity, java.time.LocalDateTime.parse(dbValue.toString()));
             }
         } else {
             // Conversion basique
