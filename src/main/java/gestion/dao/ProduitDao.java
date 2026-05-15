@@ -1,6 +1,5 @@
 package gestion.dao;
 
-import crud.GenericDao;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -8,14 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 import modele.Produit;
 
-public class ProduitDao implements GenericDao<Produit> {
+public class ProduitDao {
     private Connection connection;
 
     public ProduitDao(Connection connection) {
         this.connection = connection;
     }
 
-    @Override
     public void save(Produit produit) throws Exception {
         if (produit.getId() == 0) {
             insert(produit);
@@ -24,7 +22,6 @@ public class ProduitDao implements GenericDao<Produit> {
         }
     }
 
-    @Override
     public void insert(Produit produit) throws Exception {
         String sql = "INSERT INTO produit (nom, description, methode_valorisation, code_interne, actif) " +
                 "VALUES (?, ?, ?, ?, ?)";
@@ -43,7 +40,6 @@ public class ProduitDao implements GenericDao<Produit> {
         }
     }
 
-    @Override
     public void update(Produit produit) throws Exception {
         String sql = "UPDATE produit SET nom = ?, description = ?, methode_valorisation = ?, " +
                 "code_interne = ?, actif = ? WHERE id = ?";
@@ -58,7 +54,6 @@ public class ProduitDao implements GenericDao<Produit> {
         }
     }
 
-    @Override
     public void delete(int id) throws Exception {
         String sql = "DELETE FROM produit WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -67,7 +62,6 @@ public class ProduitDao implements GenericDao<Produit> {
         }
     }
 
-    @Override
     public Produit findById(int id) throws Exception {
         String sql = "SELECT * FROM produit WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -80,7 +74,6 @@ public class ProduitDao implements GenericDao<Produit> {
         return null;
     }
 
-    @Override
     public List<Produit> findAll() throws Exception {
         List<Produit> produits = new ArrayList<>();
         String sql = "SELECT * FROM produit WHERE actif = true ORDER BY nom";

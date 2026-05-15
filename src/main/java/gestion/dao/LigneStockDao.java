@@ -1,6 +1,5 @@
 package gestion.dao;
 
-import crud.GenericDao;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -8,14 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 import modele.LigneStock;
 
-public class LigneStockDao implements GenericDao<LigneStock> {
+public class LigneStockDao {
     private Connection connection;
 
     public LigneStockDao(Connection connection) {
         this.connection = connection;
     }
 
-    @Override
     public void save(LigneStock ligne) throws Exception {
         if (ligne.getId() == 0) {
             insert(ligne);
@@ -24,7 +22,6 @@ public class LigneStockDao implements GenericDao<LigneStock> {
         }
     }
 
-    @Override
     public void insert(LigneStock ligne) throws Exception {
         String sql = "INSERT INTO ligne_stock (id_produit, id_mouvement_entree, quantite_initiale, " +
                 "quantite_restante, prix_unitaire, date_entree, date_consommation) " +
@@ -47,7 +44,6 @@ public class LigneStockDao implements GenericDao<LigneStock> {
         }
     }
 
-    @Override
     public void update(LigneStock ligne) throws Exception {
         String sql = "UPDATE ligne_stock SET quantite_restante = ?, date_consommation = ? WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -59,7 +55,6 @@ public class LigneStockDao implements GenericDao<LigneStock> {
         }
     }
 
-    @Override
     public void delete(int id) throws Exception {
         String sql = "DELETE FROM ligne_stock WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -68,7 +63,6 @@ public class LigneStockDao implements GenericDao<LigneStock> {
         }
     }
 
-    @Override
     public LigneStock findById(int id) throws Exception {
         String sql = "SELECT * FROM ligne_stock WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -81,7 +75,6 @@ public class LigneStockDao implements GenericDao<LigneStock> {
         return null;
     }
 
-    @Override
     public List<LigneStock> findAll() throws Exception {
         List<LigneStock> lignes = new ArrayList<>();
         String sql = "SELECT * FROM ligne_stock ORDER BY date_entree ASC";

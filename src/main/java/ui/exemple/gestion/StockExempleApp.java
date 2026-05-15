@@ -43,18 +43,107 @@ public class StockExempleApp extends JFrame {
         }
 
         // Onglet Mouvements
-        MouvementExempleApp mouvementPanel = new MouvementExempleApp();
-        tabbedPane.addTab("Mouvements de Stock", mouvementPanel.getContentPane());
+        try {
+            MouvementExempleApp mouvementPanel = new MouvementExempleApp();
+            tabbedPane.addTab("Mouvements de Stock", mouvementPanel.getContentPane());
+        } catch (Exception exception) {
+            JPanel errorPanel = new JPanel(new BorderLayout());
+            errorPanel.add(new JLabel("Impossible de charger l'exemple mouvement : " + exception.getMessage()), BorderLayout.CENTER);
+            tabbedPane.addTab("Mouvements de Stock", errorPanel);
+        }
 
         // Onglet État du Stock
-        EtatStockExempleApp etatPanel = new EtatStockExempleApp();
-        tabbedPane.addTab("État du Stock", etatPanel.getContentPane());
+        try {
+            EtatStockExempleApp etatPanel = new EtatStockExempleApp();
+            tabbedPane.addTab("État du Stock", etatPanel.getContentPane());
+        } catch (Exception exception) {
+            JPanel errorPanel = new JPanel(new BorderLayout());
+            errorPanel.add(new JLabel("Impossible de charger l'exemple état stock : " + exception.getMessage()), BorderLayout.CENTER);
+            tabbedPane.addTab("État du Stock", errorPanel);
+        }
 
         // Onglet Rapports
         JPanel reportPanel = createReportPanel();
         tabbedPane.addTab("Rapports", reportPanel);
 
+        // Onglet métier FIFO / LIFO / CUMP
+        JPanel valorisationPanel = createValorisationPanel();
+        tabbedPane.addTab("Valorisation", valorisationPanel);
+
         add(tabbedPane);
+    }
+
+    private JPanel createValorisationPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel header = new JPanel(new BorderLayout(5, 5));
+        JLabel title = new JLabel("Fenêtrage métier FIFO / LIFO / CUMP");
+        title.setFont(new Font("Arial", Font.BOLD, 16));
+        header.add(title, BorderLayout.NORTH);
+        header.add(new JLabel("Ouvre la fenêtre qui reprend les tableaux du document métier : mouvements, sorties, FIFO, LIFO et CUMP."), BorderLayout.SOUTH);
+        panel.add(header, BorderLayout.NORTH);
+
+        JPanel buttons = new JPanel(new GridLayout(2, 2, 10, 10));
+        buttons.setBorder(BorderFactory.createTitledBorder("Fenêtres"));
+
+        JButton btnValorisation = new JButton("Ouvrir la valorisation");
+        btnValorisation.addActionListener(e -> {
+            try {
+                new ValorisationStockExempleApp().setVisible(true);
+            } catch (Exception exception) {
+                JOptionPane.showMessageDialog(this,
+                        "Impossible d'ouvrir la fenêtre de valorisation : " + exception.getMessage(),
+                        "Erreur",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        buttons.add(btnValorisation);
+
+        JButton btnProduits = new JButton("Gestion produits");
+        btnProduits.addActionListener(e -> ouvrirFenetreProduit());
+        buttons.add(btnProduits);
+
+        JButton btnMouvements = new JButton("Gestion mouvements");
+        btnMouvements.addActionListener(e -> ouvrirFenetreMouvement());
+        buttons.add(btnMouvements);
+
+        JButton btnEtat = new JButton("État du stock");
+        btnEtat.addActionListener(e -> ouvrirFenetreEtatStock());
+        buttons.add(btnEtat);
+
+        panel.add(buttons, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private void ouvrirFenetreProduit() {
+        try {
+            new ProduitExempleApp().setVisible(true);
+        } catch (Exception exception) {
+            JOptionPane.showMessageDialog(this,
+                    "Impossible d'ouvrir la fenêtre produit : " + exception.getMessage(),
+                    "Erreur", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void ouvrirFenetreMouvement() {
+        try {
+            new MouvementExempleApp().setVisible(true);
+        } catch (Exception exception) {
+            JOptionPane.showMessageDialog(this,
+                    "Impossible d'ouvrir la fenêtre mouvement : " + exception.getMessage(),
+                    "Erreur", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void ouvrirFenetreEtatStock() {
+        try {
+            new EtatStockExempleApp().setVisible(true);
+        } catch (Exception exception) {
+            JOptionPane.showMessageDialog(this,
+                    "Impossible d'ouvrir la fenêtre état stock : " + exception.getMessage(),
+                    "Erreur", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private JPanel createReportPanel() {

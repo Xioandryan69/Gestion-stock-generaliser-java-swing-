@@ -1,6 +1,5 @@
 package gestion.dao;
 
-import crud.GenericDao;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -8,14 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 import modele.MouvementStock;
 
-public class MouvementStockDao implements GenericDao<MouvementStock> {
+public class MouvementStockDao {
     private Connection connection;
 
     public MouvementStockDao(Connection connection) {
         this.connection = connection;
     }
 
-    @Override
     public void save(MouvementStock mouvement) throws Exception {
         if (mouvement.getId() == 0) {
             insert(mouvement);
@@ -24,7 +22,6 @@ public class MouvementStockDao implements GenericDao<MouvementStock> {
         }
     }
 
-    @Override
     public void insert(MouvementStock mouvement) throws Exception {
         String sql = "INSERT INTO mouvement_stock (id_produit, type_mouvement, quantite, prix_unitaire, " +
                 "reference_achat, reference_vente, date_mouvement, statut, notes) " +
@@ -48,7 +45,6 @@ public class MouvementStockDao implements GenericDao<MouvementStock> {
         }
     }
 
-    @Override
     public void update(MouvementStock mouvement) throws Exception {
         String sql = "UPDATE mouvement_stock SET id_produit = ?, type_mouvement = ?, quantite = ?, " +
                 "prix_unitaire = ?, reference_achat = ?, reference_vente = ?, date_mouvement = ?, " +
@@ -68,7 +64,6 @@ public class MouvementStockDao implements GenericDao<MouvementStock> {
         }
     }
 
-    @Override
     public void delete(int id) throws Exception {
         String sql = "DELETE FROM mouvement_stock WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -77,7 +72,6 @@ public class MouvementStockDao implements GenericDao<MouvementStock> {
         }
     }
 
-    @Override
     public MouvementStock findById(int id) throws Exception {
         String sql = "SELECT * FROM mouvement_stock WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -90,7 +84,6 @@ public class MouvementStockDao implements GenericDao<MouvementStock> {
         return null;
     }
 
-    @Override
     public List<MouvementStock> findAll() throws Exception {
         List<MouvementStock> mouvements = new ArrayList<>();
         String sql = "SELECT * FROM mouvement_stock WHERE statut = 'VALIDÉ' ORDER BY date_mouvement DESC";
