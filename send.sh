@@ -32,6 +32,7 @@ echo "📁 Source      : $source_dir"
 echo "📁 Destination : $dest_dir"
 echo "📄 Copie       : Tous les fichiers sauf *.jar"
 echo "📝 Archive     : sources_structured.txt"
+echo "🚫 Exclusions  : .git/ et out/*.class"
 echo ""
 
 read -p "Continuer ? (o/n) " -n 1 -r
@@ -59,7 +60,7 @@ cat > "$ARCHIVE_FILE" <<EOF
 
 EOF
 
-# Fonction archive
+# Fonction archive (inchangée)
 format_file_for_archive() {
     local file="$1"
     local rel_path="$2"
@@ -116,10 +117,33 @@ copied_count=0
 jar_skipped=0
 archived_count=0
 error_count=0
+ignored_git_out=0
+
+# ======================================================
+# PATTERNS D'EXCLUSION (expressions régulières bash)
+# ======================================================
+exclude_patterns=(
+    ".*/\.git/.*"           # tout ce qui est sous .git/
+    ".*/out/.*\.class$"     # les .class sous out/ (et ses sous-dossiers)
+)
 
 while IFS= read -r file; do
 
     ((total_files++))
+
+    # Vérifier si le fichier correspond à un motif exclu
+    excluded=0
+    for pattern in "${exclude_patterns[@]}"; do
+        if [[ "$file" =~ $pattern ]]; then
+            excluded=1
+            break
+        fi
+    done
+
+    if [ $excluded -eq 1 ]; then
+        ((ignored_git_out++))
+        continue   # ni copie, ni archivage
+    fi
 
     filename=$(basename "$file")
     extension="${filename##*.}"
@@ -176,11 +200,12 @@ echo "=============================================="
 echo "RÉSUMÉ"
 echo "=============================================="
 
-echo "📊 Total fichiers         : $total_files"
-echo "✅ Fichiers copiés        : $copied_count"
-echo "🚫 JAR ignorés            : $jar_skipped"
-echo "📝 Fichiers archivés      : $archived_count"
-echo "❌ Erreurs                : $error_count"
+echo "📊 Total fichiers trouvés    : $total_files"
+echo "✅ Fichiers copiés           : $copied_count"
+echo "🚫 JAR ignorés               : $jar_skipped"
+echo "🙈 Exclus (.git + out/*.class) : $ignored_git_out"
+echo "📝 Fichiers archivés         : $archived_count"
+echo "❌ Erreurs                   : $error_count"
 
 echo ""
 echo "📁 Destination : $dest_dir"
