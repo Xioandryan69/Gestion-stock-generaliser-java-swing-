@@ -153,7 +153,8 @@ public class DynamicCrudPanel<T> extends JPanel {
             for (int i = 0; i < editableFields.size(); i++) {
                 try {
                     Object value = editableFields.get(i).get(entity);
-                    row[i] = value != null ? value.toString() : null;
+                    // Preserve the actual value type; don't convert to string
+                    row[i] = value;
                 } catch (Exception exception) {
                     row[i] = null;
                 }
