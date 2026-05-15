@@ -162,6 +162,7 @@ public class DynamicFormPanel extends JPanel {
     // Réinitialiser
     // -------------------------------------------------------
     public void resetForm() {
+        sourceEntity = null;
         for (Map.Entry<String, JComponent> entry : componentMap.entrySet()) {
             JComponent c = entry.getValue();
             if (c instanceof JTextField)   ((JTextField) c).setText("");
@@ -263,7 +264,18 @@ public class DynamicFormPanel extends JPanel {
      */
     public void setSourceEntity(Object entity) {
         this.sourceEntity = entity;
-        fillFrom(entity);
+        if (entity == null) {
+            resetForm();
+        } else {
+            fillFrom(entity);
+        }
+    }
+
+    /**
+     * Réinitialise l'entité source courante.
+     */
+    public void clearSourceEntity() {
+        this.sourceEntity = null;
     }
 
     /**
