@@ -25,7 +25,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.SpinnerDateModel;
-import javax.swing.SwingUtilities;
 import javax.swing.event.ListSelectionEvent;
 import modele.MouvementStock;
 import modele.Produit;
@@ -395,7 +394,7 @@ public class MouvementExempleApp extends JFrame {
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
+        javax.swing.SwingUtilities.invokeLater(() -> {
             try {
                 new MouvementExempleApp().setVisible(true);
             } catch (Exception exception) {
