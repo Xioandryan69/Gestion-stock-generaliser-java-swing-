@@ -11,6 +11,7 @@ import modele.*;
  * Gère les entrées, sorties et calculs de valorisation (FIFO, LIFO, CUMP).
  */
 public class StockService {
+    @SuppressWarnings("FieldMayBeFinal")
     private ProduitDao produitDao;
     private MouvementStockDao mouvementDao;
     private LigneStockDao ligneStockDao;
@@ -293,6 +294,7 @@ public class StockService {
 
         // structure locale pour lots
         class Lot {
+            @SuppressWarnings("unused")
             java.time.LocalDate dateEntree;
             BigDecimal quantite;
             BigDecimal prixUnitaire;

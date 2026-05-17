@@ -8,6 +8,7 @@ import java.util.List;
 import modele.MouvementStock;
 
 public class MouvementStockDao {
+    @SuppressWarnings("FieldMayBeFinal")
     private Connection connection;
 
     public MouvementStockDao(Connection connection) {
@@ -42,6 +43,8 @@ public class MouvementStockDao {
             if (keys.next()) {
                 mouvement.setId(keys.getInt(1));
             }
+        } catch (Exception e) {
+            throw new Exception("Erreur lors de l'insertion du mouvement de stock : " + e.getMessage(), e);
         }
     }
 
@@ -61,6 +64,8 @@ public class MouvementStockDao {
             stmt.setString(9, mouvement.getNotes());
             stmt.setInt(10, mouvement.getId());
             stmt.executeUpdate();
+        }catch (Exception e) {
+            throw new Exception("Erreur lors de la mise à jour du mouvement de stock : " + e.getMessage(), e);
         }
     }
 
@@ -69,7 +74,9 @@ public class MouvementStockDao {
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setInt(1, id);
             stmt.executeUpdate();
-        }
+        }catch (Exception e) {
+            throw new Exception("Erreur lors de la suppression du mouvement de stock : " + e.getMessage(), e);
+        }   
     }
 
     public MouvementStock findById(int id) throws Exception {
@@ -159,7 +166,9 @@ public class MouvementStockDao {
         return mouvements;
     }
 
+    @SuppressWarnings("UseSpecificCatch")
     private MouvementStock mapResultSetToMouvement(ResultSet rs) throws Exception {
+        try {
         MouvementStock mouvement = new MouvementStock();
         mouvement.setId(rs.getInt("id"));
         mouvement.setIdProduit(rs.getInt("id_produit"));
@@ -172,5 +181,10 @@ public class MouvementStockDao {
         mouvement.setStatut(rs.getString("statut"));
         mouvement.setNotes(rs.getString("notes"));
         return mouvement;
+            
+        } catch (Exception e) {
+            throw new Exception("Erreur lors du mappage du ResultSet vers MouvementStock : " + e.getMessage(), e);
+        }
+
     }
 }

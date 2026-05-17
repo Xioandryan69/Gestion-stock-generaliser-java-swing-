@@ -1,31 +1,23 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
-    "java.project.sourcePaths": [
-        "src/main/java"
-    ],
+    "java.project.sourcePaths": ["src/main/java"],
     "java.project.outputPath": "out",
-
     "java.jdt.ls.java.home": "/usr/lib/jvm/java-21-openjdk-amd64",
     "java.configuration.runtimes": [
         {
             "name": "JavaSE-21",
-            "path": "/usr/lib/jvm/java-21-openjdk-amd64"
+            "path": "/usr/lib/jvm/java-21-openjdk-amd64",
+            "default": true
         }
     ],
-
+    "java.project.referencedLibraries": ["lib/**/*.jar"],
     "java.import.gradle.enabled": false,
     "java.import.maven.enabled": false,
-
     "editor.formatOnSave": false,
     "java.format.enabled": false,
-
-    "java.saveActions.organizeImports": false,
-
-    "java.completion.importOrder": [
-        "java",
-        "javax",
-        "jakarta",
-        "#"
-    ],
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "java.completion.importOrder": ["java", "javax", "jakarta", "#"],
     "java.debug.settings.onBuildFailureProceed": true
 }
