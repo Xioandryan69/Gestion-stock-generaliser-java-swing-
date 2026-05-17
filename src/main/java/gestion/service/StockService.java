@@ -40,7 +40,7 @@ public class StockService {
     /**
      * Sortie de stock avec application de la méthode configurée
      */
-    public BigDecimal sortieStock(int idProduit, BigDecimal quantite, String referenceVente) throws Exception {
+    public BigDecimal sortieStock(int idProduit, BigDecimal quantite, String referenceVente, LocalDate date, String methodeOverride) throws Exception {
         Produit produit = produitDao.findById(idProduit);
         if (produit == null) {
             throw new Exception("Produit non trouvé");
@@ -48,15 +48,17 @@ public class StockService {
 
         BigDecimal coutSortie = BigDecimal.ZERO;
 
-        switch (produit.getMethodeValorisation()) {
+        String methode = (methodeOverride != null && !methodeOverride.isBlank()) ? methodeOverride : produit.getMethodeValorisation();
+        if (methode == null) methode = "CUMP";
+        switch (methode) {
             case "FIFO":
-                coutSortie = sortieStockFIFO(idProduit, quantite, referenceVente);
+                coutSortie = sortieStockFIFO(idProduit, quantite, referenceVente, date);
                 break;
             case "LIFO":
-                coutSortie = sortieStockLIFO(idProduit, quantite, referenceVente);
+                coutSortie = sortieStockLIFO(idProduit, quantite, referenceVente, date);
                 break;
             case "CUMP":
-                coutSortie = sortieStockCUMP(idProduit, quantite, referenceVente);
+                coutSortie = sortieStockCUMP(idProduit, quantite, referenceVente, date);
                 break;
             default:
                 throw new Exception("Méthode de valorisation inconnue: " + produit.getMethodeValorisation());
@@ -65,17 +67,55 @@ public class StockService {
         // Enregistrer le mouvement de sortie
         MouvementStock mouvement = new MouvementStock(idProduit, "SORTIE", quantite, BigDecimal.ZERO);
         mouvement.setReferenceVente(referenceVente);
-        mouvement.setDateMouvement(LocalDate.now());
+        mouvement.setDateMouvement(date != null ? date : LocalDate.now());
         mouvementDao.save(mouvement);
 
         return coutSortie;
     }
 
     /**
+     * Estime le coût total d'une sortie sans modifier la base (aperçu).
+     * Retourne la valeur totale (non le PU). Pour obtenir le PU, diviser par la quantité.
+     */
+    public BigDecimal estimateSortieCost(int idProduit, BigDecimal quantiteASortir, String methode) throws Exception {
+        if (methode == null || methode.isBlank()) {
+            Produit produit = produitDao.findById(idProduit);
+            methode = produit != null ? produit.getMethodeValorisation() : "CUMP";
+        }
+
+        if ("CUMP".equalsIgnoreCase(methode)) {
+            BigDecimal cump = calculerCUMP(idProduit);
+            return cump.multiply(quantiteASortir);
+        }
+
+        List<LigneStock> lignes;
+        if ("LIFO".equalsIgnoreCase(methode)) {
+            lignes = ligneStockDao.findByProduitIdDescending(idProduit);
+        } else {
+            lignes = ligneStockDao.findByProduitIdWithRestant(idProduit);
+        }
+
+        BigDecimal reste = quantiteASortir;
+        BigDecimal total = BigDecimal.ZERO;
+        for (LigneStock ligne : lignes) {
+            if (reste.compareTo(BigDecimal.ZERO) <= 0) break;
+            BigDecimal prendre = ligne.getQuantiteRestante().min(reste);
+            total = total.add(prendre.multiply(ligne.getPrixUnitaire()));
+            reste = reste.subtract(prendre);
+        }
+
+        if (reste.compareTo(BigDecimal.ZERO) > 0) {
+            throw new Exception("Stock insuffisant pour estimer la sortie. Disponible diff: " + reste);
+        }
+
+        return total;
+    }
+
+    /**
      * FIFO : First In First Out
      * Consomme les lots les plus anciens en premier
      */
-    public BigDecimal sortieStockFIFO(int idProduit, BigDecimal quantiteASortir, String referenceVente) throws Exception {
+    public BigDecimal sortieStockFIFO(int idProduit, BigDecimal quantiteASortir, String referenceVente, LocalDate date) throws Exception {
         List<LigneStock> lignes = ligneStockDao.findByProduitIdWithRestant(idProduit);
         BigDecimal quantiteConsommee = BigDecimal.ZERO;
         BigDecimal coutTotal = BigDecimal.ZERO;
@@ -93,7 +133,7 @@ public class StockService {
 
             coutTotal = coutTotal.add(aConsommer.multiply(ligne.getPrixUnitaire()));
             ligne.setQuantiteRestante(ligne.getQuantiteRestante().subtract(aConsommer));
-            ligne.setDateConsommation(LocalDate.now());
+            ligne.setDateConsommation(date != null ? date : LocalDate.now());
             ligneStockDao.save(ligne);
 
             quantiteConsommee = quantiteConsommee.add(aConsommer);
@@ -110,7 +150,7 @@ public class StockService {
      * LIFO : Last In First Out
      * Consomme les lots les plus récents en premier
      */
-    public BigDecimal sortieStockLIFO(int idProduit, BigDecimal quantiteASortir, String referenceVente) throws Exception {
+    public BigDecimal sortieStockLIFO(int idProduit, BigDecimal quantiteASortir, String referenceVente, LocalDate date) throws Exception {
         List<LigneStock> lignes = ligneStockDao.findByProduitIdDescending(idProduit);
         BigDecimal quantiteConsommee = BigDecimal.ZERO;
         BigDecimal coutTotal = BigDecimal.ZERO;
@@ -128,7 +168,7 @@ public class StockService {
 
             coutTotal = coutTotal.add(aConsommer.multiply(ligne.getPrixUnitaire()));
             ligne.setQuantiteRestante(ligne.getQuantiteRestante().subtract(aConsommer));
-            ligne.setDateConsommation(LocalDate.now());
+            ligne.setDateConsommation(date != null ? date : LocalDate.now());
             ligneStockDao.save(ligne);
 
             quantiteConsommee = quantiteConsommee.add(aConsommer);
@@ -145,7 +185,7 @@ public class StockService {
      * CUMP : Coût Unitaire Moyen Pondéré
      * Utilise le CUMP actuel du produit
      */
-    public BigDecimal sortieStockCUMP(int idProduit, BigDecimal quantiteASortir, String referenceVente) throws Exception {
+    public BigDecimal sortieStockCUMP(int idProduit, BigDecimal quantiteASortir, String referenceVente, LocalDate date) throws Exception {
         BigDecimal cump = calculerCUMP(idProduit);
         
         // Réduire le stock disponible
@@ -175,7 +215,7 @@ public class StockService {
             }
 
             ligne.setQuantiteRestante(ligne.getQuantiteRestante().subtract(consommer));
-            ligne.setDateConsommation(LocalDate.now());
+            ligne.setDateConsommation(date != null ? date : LocalDate.now());
             ligneStockDao.save(ligne);
 
             aConsommer = aConsommer.subtract(consommer);
@@ -230,6 +270,134 @@ public class StockService {
         etat.setCump(calculerCUMP(idProduit));
 
         return etat;
+    }
+
+    /**
+     * Reconstitue l'état du stock à une date donnée en rejouant les mouvements
+     * depuis le début jusqu'à la date (inclus) et en appliquant la méthode demandée.
+     * Cette méthode n'altère pas la base de données.
+     *
+     * @param idProduit identifiant du produit
+     * @param date date cible (inclus)
+     * @param methodeOverride si non-null, force l'utilisation de cette méthode (FIFO/LIFO/CUMP), sinon utilise celle du produit
+     */
+    public EtatStock computeSnapshotAtDate(int idProduit, LocalDate date, String methodeOverride) throws Exception {
+        Produit produit = produitDao.findById(idProduit);
+        if (produit == null) throw new Exception("Produit non trouvé");
+
+        String methode = (methodeOverride != null && !methodeOverride.isBlank()) ? methodeOverride : produit.getMethodeValorisation();
+        if (methode == null) methode = "CUMP";
+
+        // récupérer tous les mouvements jusqu'à la date (ascendant)
+        List<MouvementStock> mouvements = mouvementDao.findByProduitIdUntilDate(idProduit, date);
+
+        // structure locale pour lots
+        class Lot {
+            java.time.LocalDate dateEntree;
+            BigDecimal quantite;
+            BigDecimal prixUnitaire;
+
+            Lot(java.time.LocalDate d, BigDecimal q, BigDecimal p) { dateEntree = d; quantite = q; prixUnitaire = p; }
+        }
+
+        java.util.LinkedList<Lot> lots = new java.util.LinkedList<>();
+        BigDecimal cumpValueForRemaining = null; // pour CUMP: valeur que le stock restant doit avoir
+
+        for (MouvementStock m : mouvements) {
+            if ("ENTREE".equalsIgnoreCase(m.getTypeMouvement())) {
+                // créer un lot avec la quantité entrée
+                BigDecimal q = m.getQuantite() != null ? m.getQuantite() : BigDecimal.ZERO;
+                BigDecimal pu = m.getPrixUnitaire() != null ? m.getPrixUnitaire() : BigDecimal.ZERO;
+                lots.add(new Lot(m.getDateMouvement(), q, pu));
+            } else {
+                // SORTIE -> consommer selon methode
+                BigDecimal toConsume = m.getQuantite() != null ? m.getQuantite() : BigDecimal.ZERO;
+                if (toConsume.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                if ("CUMP".equalsIgnoreCase(methode)) {
+                    // valeur et quantité totales disponibles
+                    BigDecimal totalQty = BigDecimal.ZERO;
+                    BigDecimal totalVal = BigDecimal.ZERO;
+                    for (Lot l : lots) {
+                        totalQty = totalQty.add(l.quantite);
+                        totalVal = totalVal.add(l.quantite.multiply(l.prixUnitaire));
+                    }
+                    if (totalQty.compareTo(BigDecimal.ZERO) == 0) {
+                        throw new Exception("Stock insuffisant pour sortie au CUMP");
+                    }
+                    BigDecimal cump = totalVal.divide(totalQty, 8, java.math.RoundingMode.HALF_UP);
+                    
+                    // Le stock restant doit être valorisé au CUMP
+                    BigDecimal qtyRestante = totalQty.subtract(toConsume);
+                    if (qtyRestante.compareTo(BigDecimal.ZERO) < 0) {
+                        throw new Exception("Stock insuffisant. Manque: " + qtyRestante.abs());
+                    }
+                    // Arrondir à 2 décimales pour correspondre aux valeurs monétaires
+                    cumpValueForRemaining = qtyRestante.multiply(cump)
+                            .setScale(2, java.math.RoundingMode.HALF_UP);
+
+                    // consommer FIFO (ordre physique) mais appliquer la valeur CUMP
+                    BigDecimal reste = toConsume;
+                    java.util.Iterator<Lot> it = lots.iterator();
+                    while (it.hasNext() && reste.compareTo(BigDecimal.ZERO) > 0) {
+                        Lot l = it.next();
+                        BigDecimal prendre = l.quantite.min(reste);
+                        l.quantite = l.quantite.subtract(prendre);
+                        reste = reste.subtract(prendre);
+                        if (l.quantite.compareTo(BigDecimal.ZERO) == 0) it.remove();
+                    }
+                } else if ("LIFO".equalsIgnoreCase(methode)) {
+                    BigDecimal reste = toConsume;
+                    while (!lots.isEmpty() && reste.compareTo(BigDecimal.ZERO) > 0) {
+                        Lot l = lots.getLast();
+                        BigDecimal prendre = l.quantite.min(reste);
+                        l.quantite = l.quantite.subtract(prendre);
+                        reste = reste.subtract(prendre);
+                        if (l.quantite.compareTo(BigDecimal.ZERO) == 0) lots.removeLast();
+                    }
+                    if (reste.compareTo(BigDecimal.ZERO) > 0) {
+                        throw new Exception("Stock insuffisant. Manque: " + reste);
+                    }
+                } else { // FIFO par défaut
+                    BigDecimal reste = toConsume;
+                    while (!lots.isEmpty() && reste.compareTo(BigDecimal.ZERO) > 0) {
+                        Lot l = lots.getFirst();
+                        BigDecimal prendre = l.quantite.min(reste);
+                        l.quantite = l.quantite.subtract(prendre);
+                        reste = reste.subtract(prendre);
+                        if (l.quantite.compareTo(BigDecimal.ZERO) == 0) lots.removeFirst();
+                    }
+                    if (reste.compareTo(BigDecimal.ZERO) > 0) {
+                        throw new Exception("Stock insuffisant. Manque: " + reste);
+                    }
+                }
+            }
+        }
+
+        // calculer quantite et valeur restantes
+        BigDecimal quantiteRestante = BigDecimal.ZERO;
+        BigDecimal valeurRestante = BigDecimal.ZERO;
+        for (Lot l : lots) {
+            quantiteRestante = quantiteRestante.add(l.quantite);
+            valeurRestante = valeurRestante.add(l.quantite.multiply(l.prixUnitaire));
+        }
+
+        // Si on a une valeur CUMP calculée (après une sortie CUMP), l'utiliser
+        if (cumpValueForRemaining != null) {
+            valeurRestante = cumpValueForRemaining;
+        }
+
+        BigDecimal cumpFinal = quantiteRestante.compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : valeurRestante.divide(quantiteRestante, 4, java.math.RoundingMode.HALF_UP);
+
+        EtatStock result = new EtatStock();
+        result.setIdProduit(idProduit);
+        result.setDate(date);
+        result.setQuantite(quantiteRestante);
+        result.setValeurStock(valeurRestante);
+        result.setCump(cumpFinal);
+        return result;
     }
 
     /**
