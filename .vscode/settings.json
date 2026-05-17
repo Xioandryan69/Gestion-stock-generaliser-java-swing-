@@ -19,5 +19,8 @@
         "source.organizeImports": "explicit"
     },
     "java.completion.importOrder": ["java", "javax", "jakarta", "#"],
-    "java.debug.settings.onBuildFailureProceed": true
+    "java.debug.settings.onBuildFailureProceed": true,
+    "cSpell.words": [
+        "classpathentry"
+    ]
 }
