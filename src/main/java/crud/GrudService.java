@@ -3,6 +3,7 @@ package crud;
 import java.util.List;
 
 public class GrudService<T> {
+    @SuppressWarnings("FieldMayBeFinal")
     private CrudRepository<T> repository;
 
     public GrudService(CrudRepository<T> repository) {
