@@ -2,7 +2,6 @@
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.project.sourcePaths": ["src/main/java"],
     "java.project.outputPath": "out",
-    "java.jdt.ls.java.home": "/usr/lib/jvm/java-21-openjdk-amd64",
     "java.configuration.runtimes": [
         {
             "name": "JavaSE-21",
