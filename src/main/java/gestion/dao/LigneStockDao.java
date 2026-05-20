@@ -8,6 +8,7 @@ import java.util.List;
 import modele.LigneStock;
 
 public class LigneStockDao {
+    @SuppressWarnings("FieldMayBeFinal")
     private Connection connection;
 
     public LigneStockDao(Connection connection) {
@@ -41,9 +42,13 @@ public class LigneStockDao {
             if (keys.next()) {
                 ligne.setId(keys.getInt(1));
             }
+        }catch(Exception e){
+            e.getMessage();
+            throw e;
         }
     }
 
+    @SuppressWarnings("CallToPrintStackTrace")
     public void update(LigneStock ligne) throws Exception {
         String sql = "UPDATE ligne_stock SET quantite_restante = ?, date_consommation = ? WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -52,14 +57,21 @@ public class LigneStockDao {
                     java.sql.Date.valueOf(ligne.getDateConsommation()) : null);
             stmt.setInt(3, ligne.getId());
             stmt.executeUpdate();
+        }catch(Exception e){
+            e.printStackTrace();
+            throw e;
         }
     }
 
+    @SuppressWarnings("CallToPrintStackTrace")
     public void delete(int id) throws Exception {
         String sql = "DELETE FROM ligne_stock WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setInt(1, id);
             stmt.executeUpdate();
+        }catch(Exception e){
+            e.printStackTrace();
+            throw e;
         }
     }
 
@@ -115,7 +127,9 @@ public class LigneStockDao {
         return lignes;
     }
 
+    @SuppressWarnings({"UseSpecificCatch", "CallToPrintStackTrace"})
     private LigneStock mapResultSetToLigneStock(ResultSet rs) throws Exception {
+        try{
         LigneStock ligne = new LigneStock();
         ligne.setId(rs.getInt("id"));
         ligne.setIdProduit(rs.getInt("id_produit"));
@@ -129,5 +143,11 @@ public class LigneStockDao {
             ligne.setDateConsommation(dateConsommation.toLocalDate());
         }
         return ligne;
+
+        }catch(Exception e){
+            e.printStackTrace();
+            throw e;
+        }
+
     }
 }
