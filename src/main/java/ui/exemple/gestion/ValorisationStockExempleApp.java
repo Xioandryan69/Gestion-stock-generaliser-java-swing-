@@ -127,7 +127,7 @@ public class ValorisationStockExempleApp extends JFrame {
                 BorderFactory.createLineBorder(new Color(210, 210, 210)),
                 BorderFactory.createEmptyBorder(14, 16, 14, 16)));
 
-        JLabel title = new JLabel("Gestion article - FIFO / LIFO / CUMP", SwingConstants.LEFT);
+        JLabel title = new JLabel("ETU 004367 Gestion article - FIFO / LIFO / CUMP", SwingConstants.LEFT);
         title.setFont(new Font("SansSerif", Font.BOLD, 22));
         panel.add(title, BorderLayout.NORTH);
 

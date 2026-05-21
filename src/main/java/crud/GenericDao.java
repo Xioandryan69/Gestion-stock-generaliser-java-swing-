@@ -1,9 +1,29 @@
 package crud;
 
-import annotation.*;
-import java.lang.reflect.*;
-import java.sql.*;
-import java.util.*;
+import annotation.Column;
+import annotation.Enumerated;
+import annotation.Id;
+import annotation.IgnoredField;
+import annotation.ManyToOne;
+import annotation.OneToMany;
+import annotation.Table;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public class GenericDao<T> implements CrudRepository<T> {
     private final Class<T> entityClass;
@@ -96,6 +116,16 @@ public class GenericDao<T> implements CrudRepository<T> {
             conn.commit();
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public void saveAll(Collection<? extends T> entities) throws SQLException {
+        if (entities == null || entities.isEmpty()) {
+            return;
+        }
+
+        for (T entity : entities) {
+            save(entity);
         }
     }
 
@@ -323,8 +353,18 @@ public class GenericDao<T> implements CrudRepository<T> {
 
     private Object persistCollectionItem(Object item) throws Exception {
         if (item == null) return null;
+        // If the item is not an entity, it can be a simple ID value (Number/String)
+        // or an object containing an @Id field. Handle common simple cases first.
         if (!isEntity(item.getClass())) {
-            return getIdValue(item);
+            if (item instanceof Number || item instanceof String) {
+                return item;
+            }
+            try {
+                return getIdValue(item);
+            } catch (RuntimeException ignored) {
+                // No @Id field found — assume the object itself is the identifier
+                return item;
+            }
         }
 
         GenericDao<?> dao = createDaoForItem(item.getClass());
@@ -360,8 +400,11 @@ public class GenericDao<T> implements CrudRepository<T> {
     private Object convertToDbValue(Field f, Object raw) throws IllegalAccessException {
         if (raw == null) return null;
 
-        // FK : ne prendre que l'ID de l'entité liée
-        if (f.isAnnotationPresent(ManyToOne.class) || isEntity(raw.getClass())) {
+        // FK: ne prendre que l'ID quand le champ contient une vraie entité.
+        if (f.isAnnotationPresent(ManyToOne.class) && isEntity(f.getType())) {
+            return getIdValue(raw);
+        }
+        if (isEntity(raw.getClass())) {
             return getIdValue(raw);
         }
         // Enum

@@ -2209,3 +2209,37 @@ Ton raisonnement devient maintenant :
     
 - orienté architecture logicielle
     
+
+
+
+---------------------
+mouvement *4 
+
+soda -- biscuit -- 
+------------------------
+soda 
+entree
+
+60
+600
+20 mai 2026
+---------------------
+
+biscuit 
+sortie 
+80
+20 mai 2026
+
+-----------------
+bobon
+
+sortie 
+180
+20 mai 2026
+
+------------------------
+soda 
+sortie 
+30
+5 mai 2026
+-----------------------------

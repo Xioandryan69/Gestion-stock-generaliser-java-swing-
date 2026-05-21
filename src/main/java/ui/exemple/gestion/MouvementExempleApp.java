@@ -6,66 +6,56 @@ import gestion.dao.MouvementStockDao;
 import gestion.dao.ProduitDao;
 import gestion.service.StockService;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Connection;
-import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSpinner;
-import javax.swing.JTextField;
-import javax.swing.SpinnerDateModel;
-import javax.swing.event.ListSelectionEvent;
+import javax.swing.SwingUtilities;
 import modele.MouvementStock;
 import modele.Produit;
 import ui.DynamicTablePanel;
+import utils.StringUtils;
 
 /**
- * Écran métier pour saisir une entrée ou une sortie de stock.
- * Le type choisi déclenche la logique StockService correspondante.
+ * Écran métier pour saisir plusieurs mouvements avant validation.
+ * La logique métier StockService est conservée et appliquée ligne par ligne.
  */
 public class MouvementExempleApp extends JFrame {
 
-    private final JComboBox<Produit> cmbProduit = new JComboBox<>();
-    private final JComboBox<String> cmbType = new JComboBox<>(new String[]{"ENTREE", "SORTIE"});
-    private final JComboBox<String> cmbMethode = new JComboBox<>(new String[]{"PRODUIT", "FIFO", "LIFO", "CUMP"});
-    private final JTextField txtQuantite = new JTextField(12);
-    private final JTextField txtPrix = new JTextField(12);
-    private final JTextField txtReference = new JTextField(18);
-    private final JTextField txtNotes = new JTextField(24);
-    private final JSpinner spDate = new JSpinner(new SpinnerDateModel());
-    private final JLabel lblResultat = new JLabel("Prêt");
     private final DynamicTablePanel tablePanel = new DynamicTablePanel(MouvementStock.class);
-    private final JButton btnAction = new JButton("Enregistrer le mouvement");
-    private Integer selectedMovementId = null;
+    private final JLabel lblResultat = new JLabel("Prêt");
+    private final JButton btnAjouterMouvement = new JButton("Ajouter un mouvement");
+    private final JButton btnValiderMouvements = new JButton("Valider tous les mouvements");
+    private final JPanel mouvementsContainer = new JPanel();
+    private final List<MouvementRowPanel> mouvements = new ArrayList<>();
+    private final List<Produit> produitsDisponibles = new ArrayList<>();
 
     public MouvementExempleApp() {
         super("Gestion des Mouvements de Stock");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1150, 760);
+        setSize(1200, 820);
         setLocationRelativeTo(null);
 
         setContentPane(buildContent());
-        configureInitialValues();
-        wireEvents();
         refreshProducts();
+        ajouterMouvement();
         refreshMouvementsList();
     }
 
     private JPanel buildContent() {
         JPanel root = new JPanel(new BorderLayout(12, 12));
         root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-
         root.add(buildHeader(), BorderLayout.NORTH);
         root.add(buildBody(), BorderLayout.CENTER);
         root.add(buildFooter(), BorderLayout.SOUTH);
@@ -77,7 +67,7 @@ public class MouvementExempleApp extends JFrame {
         JLabel title = new JLabel("Entrée / Sortie de stock");
         title.setFont(new java.awt.Font("SansSerif", java.awt.Font.BOLD, 20));
         panel.add(title, BorderLayout.NORTH);
-        panel.add(new JLabel("Choisis un produit, sélectionne le type, puis enregistre. Le service applique FIFO/LIFO/CUMP côté base."), BorderLayout.SOUTH);
+        panel.add(new JLabel("Ajoute plusieurs mouvements, puis valide une seule fois. Chaque ligne garde son produit, sa quantité, sa date et sa méthode."), BorderLayout.SOUTH);
         return panel;
     }
 
@@ -89,60 +79,32 @@ public class MouvementExempleApp extends JFrame {
     }
 
     private JPanel buildFormPanel() {
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createTitledBorder("Saisie du mouvement"));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(6, 8, 6, 8);
-        gbc.anchor = GridBagConstraints.WEST;
-
-        int row = 0;
-        addField(form, gbc, row++, "Produit", cmbProduit);
-        addField(form, gbc, row++, "Type", cmbType);
-        addField(form, gbc, row++, "Méthode", cmbMethode);
-        addField(form, gbc, row++, "Quantité", txtQuantite);
-        addField(form, gbc, row++, "Prix unitaire", txtPrix);
-        addField(form, gbc, row++, "Référence", txtReference);
-        addField(form, gbc, row++, "Notes", txtNotes);
-
-        spDate.setEditor(new JSpinner.DateEditor(spDate, "dd/MM/yyyy"));
-        addField(form, gbc, row++, "Date", spDate);
-
-        JButton btnCalcPU = new JButton("Calculer PU");
-        btnCalcPU.addActionListener(e -> calculerPU());
-        gbc.gridx = 0;
-        gbc.gridy = row++;
-        gbc.gridwidth = 2;
-        form.add(btnCalcPU, gbc);
+        JPanel form = new JPanel(new BorderLayout(8, 8));
+        form.setBorder(BorderFactory.createTitledBorder("Saisie des mouvements"));
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         JButton btnRafraichir = new JButton("Rafraîchir la table");
         JButton btnReset = new JButton("Réinitialiser");
 
-        btnAction.addActionListener(e -> traiterMouvement());
+        btnAjouterMouvement.addActionListener(e -> ajouterMouvement());
+        btnValiderMouvements.addActionListener(e -> validerTousLesMouvements());
         btnRafraichir.addActionListener(e -> refreshMouvementsList());
         btnReset.addActionListener(e -> resetForm());
 
-        buttons.add(btnAction);
+        buttons.add(btnAjouterMouvement);
+        buttons.add(btnValiderMouvements);
         buttons.add(btnRafraichir);
         buttons.add(btnReset);
+        form.add(buttons, BorderLayout.NORTH);
 
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        gbc.gridwidth = 2;
-        form.add(buttons, gbc);
+        mouvementsContainer.setLayout(new BoxLayout(mouvementsContainer, BoxLayout.Y_AXIS));
+        mouvementsContainer.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+
+        JScrollPane rowsScroll = new JScrollPane(mouvementsContainer);
+        rowsScroll.setPreferredSize(new Dimension(0, 360));
+        form.add(rowsScroll, BorderLayout.CENTER);
 
         return form;
-    }
-
-    private void addField(JPanel form, GridBagConstraints gbc, int row, String label, java.awt.Component field) {
-        gbc.gridwidth = 1;
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        form.add(new JLabel(label + " :"), gbc);
-
-        gbc.gridx = 1;
-        form.add(field, gbc);
     }
 
     private JPanel buildFooter() {
@@ -152,126 +114,42 @@ public class MouvementExempleApp extends JFrame {
         return panel;
     }
 
-    private void configureInitialValues() {
-        spDate.setValue(java.sql.Date.valueOf(LocalDate.now()));
-        txtPrix.setEnabled(true);
-        cmbType.setSelectedItem("ENTREE");
-        cmbMethode.setSelectedItem("PRODUIT");
+    private void ajouterMouvement() {
+        MouvementRowPanel row = new MouvementRowPanel(this::supprimerMouvement, this::calculerPU);
+        row.applyProducts(produitsDisponibles);
+        mouvements.add(row);
+        mouvementsContainer.add(row);
+        refreshRowTitles();
+        mouvementsContainer.revalidate();
+        mouvementsContainer.repaint();
     }
 
-    private void wireEvents() {
-        cmbType.addActionListener(e -> updateFieldState());
-        cmbMethode.addActionListener(e -> {
-            if ("SORTIE".equals(cmbType.getSelectedItem())) {
-                calculerPU();
-            }
-        });
-        tablePanel.getTable().getSelectionModel().addListSelectionListener(this::onMovementSelected);
-    }
-
-    private void onMovementSelected(ListSelectionEvent event) {
-        if (event.getValueIsAdjusting()) {
+    private void supprimerMouvement(MouvementRowPanel row) {
+        if (mouvements.size() <= 1) {
+            row.resetRow();
             return;
         }
 
-        MouvementStock selected = (MouvementStock) tablePanel.getSelectedEntity();
-        if (selected == null) {
-            return;
-        }
-
-        selectedMovementId = selected.getId();
-        selectProduitById(selected.getIdProduit());
-        cmbType.setSelectedItem(selected.getTypeMouvement());
-        txtQuantite.setText(selected.getQuantite() != null ? selected.getQuantite().toPlainString() : "");
-        txtPrix.setText(selected.getPrixUnitaire() != null ? selected.getPrixUnitaire().toPlainString() : "");
-        txtReference.setText(firstNonBlank(selected.getReferenceAchat(), selected.getReferenceVente()));
-        txtNotes.setText(selected.getNotes() != null ? selected.getNotes() : "");
-        if (selected.getDateMouvement() != null) {
-            spDate.setValue(java.sql.Date.valueOf(selected.getDateMouvement()));
-        }
-
-        setEditionMode(true);
-        lblResultat.setText("Sélectionné: mouvement #" + selectedMovementId);
+        mouvements.remove(row);
+        mouvementsContainer.remove(row);
+        refreshRowTitles();
+        mouvementsContainer.revalidate();
+        mouvementsContainer.repaint();
     }
 
-    private void selectProduitById(Integer idProduit) {
-        if (idProduit == null) {
-            return;
-        }
-        for (int i = 0; i < cmbProduit.getItemCount(); i++) {
-            Produit produit = cmbProduit.getItemAt(i);
-            if (produit != null && idProduit.equals(produit.getId())) {
-                cmbProduit.setSelectedIndex(i);
-                return;
-            }
-        }
-    }
-
-    private String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first;
-        }
-        if (second != null && !second.isBlank()) {
-            return second;
-        }
-        return "";
-    }
-
-    private void setEditionMode(boolean enabled) {
-        cmbProduit.setEnabled(!enabled);
-        cmbType.setEnabled(!enabled);
-        txtQuantite.setEnabled(!enabled);
-        txtPrix.setEnabled(!enabled);
-        btnAction.setText(enabled ? "Modifier la sélection" : "Enregistrer le mouvement");
-    }
-
-    private void updateFieldState() {
-        boolean entree = "ENTREE".equals(cmbType.getSelectedItem());
-        txtPrix.setEnabled(entree);
-        if (!entree) {
-            txtPrix.setText("0");
-        }
-    }
-
-    private void calculerPU() {
-        if (!"SORTIE".equals(cmbType.getSelectedItem())) {
-            JOptionPane.showMessageDialog(this, "Calcul PU réservé aux sorties.", "Info", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-
-        Produit produit = (Produit) cmbProduit.getSelectedItem();
-        if (produit == null) {
-            JOptionPane.showMessageDialog(this, "Sélectionner un produit.", "Erreur", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        BigDecimal quantite = lireBigDecimal(txtQuantite.getText(), "quantité");
-        if (quantite == null) return;
-
-        String methode = (String) cmbMethode.getSelectedItem();
-        if ("PRODUIT".equals(methode)) methode = produit.getMethodeValorisation();
-
-        try (Connection connection = DatabaseConfig.getConnection()) {
-            StockService service = new StockService(new ProduitDao(connection), new MouvementStockDao(connection), new LigneStockDao(connection));
-            BigDecimal total = service.estimateSortieCost(produit.getId(), quantite, methode);
-            BigDecimal pu = total.divide(quantite, 6, BigDecimal.ROUND_HALF_UP);
-            txtPrix.setText(pu.stripTrailingZeros().toPlainString());
-            txtPrix.setEnabled(false);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Impossible d'estimer PU: " + ex.getMessage(), "Erreur", JOptionPane.ERROR_MESSAGE);
+    private void refreshRowTitles() {
+        for (int i = 0; i < mouvements.size(); i++) {
+            mouvements.get(i).setTitleText("Mouvement " + (i + 1));
         }
     }
 
     private void refreshProducts() {
         try (Connection connection = DatabaseConfig.getConnection()) {
             ProduitDao produitDao = new ProduitDao(connection);
-            List<Produit> produits = produitDao.findAll();
-            cmbProduit.removeAllItems();
-            for (Produit produit : produits) {
-                cmbProduit.addItem(produit);
-            }
-            if (cmbProduit.getItemCount() > 0) {
-                cmbProduit.setSelectedIndex(0);
+            produitsDisponibles.clear();
+            produitsDisponibles.addAll(produitDao.findAll());
+            for (MouvementRowPanel row : mouvements) {
+                row.applyProducts(produitsDisponibles);
             }
         } catch (Exception exception) {
             JOptionPane.showMessageDialog(this,
@@ -285,14 +163,7 @@ public class MouvementExempleApp extends JFrame {
     private void refreshMouvementsList() {
         try (Connection connection = DatabaseConfig.getConnection()) {
             MouvementStockDao mouvementDao = new MouvementStockDao(connection);
-            // filtrer par date sélectionnée (etat de stock) et par produit si choisi
-            LocalDate date = ((java.util.Date) spDate.getValue()).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
-            Produit produit = (Produit) cmbProduit.getSelectedItem();
-            if (produit != null && produit.getId() != null) {
-                tablePanel.refreshData(mouvementDao.findByProduitIdUntilDate(produit.getId(), date));
-            } else {
-                tablePanel.refreshData(mouvementDao.findAllUntilDate(date));
-            }
+            tablePanel.refreshData(mouvementDao.findAll());
         } catch (Exception exception) {
             JOptionPane.showMessageDialog(this,
                     "Impossible de charger les mouvements : " + exception.getMessage(),
@@ -302,37 +173,11 @@ public class MouvementExempleApp extends JFrame {
         }
     }
 
-    private void traiterMouvement() {
-        if (selectedMovementId != null) {
-            modifierMouvementSelectionne();
+    private void validerTousLesMouvements() {
+        if (mouvements.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Ajoute au moins un mouvement.", "Validation", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        Produit produit = (Produit) cmbProduit.getSelectedItem();
-        if (produit == null || produit.getId() == null) {
-            JOptionPane.showMessageDialog(this, "Sélectionne un produit.", "Validation", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        String type = (String) cmbType.getSelectedItem();
-        BigDecimal quantite = lireBigDecimal(txtQuantite.getText(), "quantité");
-        if (quantite == null) {
-            return;
-        }
-
-        BigDecimal prix = BigDecimal.ZERO;
-        if ("ENTREE".equals(type)) {
-            prix = lireBigDecimal(txtPrix.getText(), "prix unitaire");
-            if (prix == null) {
-                return;
-            }
-        }
-
-        String reference = txtReference.getText().trim();
-        String notes = txtNotes.getText().trim();
-        LocalDate date = ((java.util.Date) spDate.getValue()).toInstant()
-                .atZone(java.time.ZoneId.systemDefault())
-                .toLocalDate();
 
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
@@ -341,113 +186,101 @@ public class MouvementExempleApp extends JFrame {
                     new ProduitDao(connection),
                     new MouvementStockDao(connection),
                     new LigneStockDao(connection));
+            MouvementStockDao mouvementDao = new MouvementStockDao(connection);
 
-            if ("ENTREE".equals(type)) {
-                service.entreeStock(produit.getId(), quantite, prix, reference, date);
-                connection.commit();
-                lblResultat.setText("Entrée enregistrée pour " + produit.getNom());
-            } else {
-                String methode = (String) cmbMethode.getSelectedItem();
-                if ("PRODUIT".equals(methode)) methode = null;
-                BigDecimal cout = service.sortieStock(produit.getId(), quantite, reference, date, methode);
-                connection.commit();
-                lblResultat.setText("Sortie enregistrée, coût calculé = " + cout);
-            }
+            int processed = 0;
+            for (MouvementRowPanel row : new ArrayList<>(mouvements)) {
+                MouvementEntry input = row.readInput(this);
+                if (input == null) {
+                    connection.rollback();
+                    return;
+                }
 
-            if (!notes.isBlank()) {
-                try (Connection noteConnection = DatabaseConfig.getConnection()) {
-                    noteConnection.setAutoCommit(false);
-                    MouvementStockDao mouvementDao = new MouvementStockDao(noteConnection);
-                    List<MouvementStock> mouvements = mouvementDao.findByProduitId(produit.getId());
-                    if (!mouvements.isEmpty()) {
-                        MouvementStock dernier = mouvements.get(0);
-                        dernier.setNotes(notes);
-                        mouvementDao.update(dernier);
-                        noteConnection.commit();
+                if ("ENTREE".equals(input.getType())) {
+                    service.entreeStock(input.getProduit().getId(), input.getQuantite(), input.getPrixUnitaire(), input.getReference(), input.getDate());
+                } else {
+                    service.sortieStock(input.getProduit().getId(), input.getQuantite(), input.getReference(), input.getDate(), input.getMethode());
+                }
+
+                if (!StringUtils.isEmpty(input.getNotes())) {
+                    List<MouvementStock> savedMovements = mouvementDao.findByProduitId(input.getProduit().getId());
+                    for (MouvementStock mouvement : savedMovements) {
+                        boolean sameType = input.getType().equalsIgnoreCase(mouvement.getTypeMouvement());
+                        boolean sameQuantity = input.getQuantite().compareTo(mouvement.getQuantite() != null ? mouvement.getQuantite() : BigDecimal.ZERO) == 0;
+                        boolean sameDate = input.getDate().equals(mouvement.getDateMouvement());
+                        boolean sameReference = input.getReference().equals(MouvementFormUtils.firstNonBlank(mouvement.getReferenceAchat(), mouvement.getReferenceVente()));
+                        if (sameType && sameQuantity && sameDate && sameReference) {
+                            mouvement.setNotes(input.getNotes());
+                            mouvementDao.update(mouvement);
+                            break;
+                        }
                     }
                 }
+
+                processed++;
             }
 
+            connection.commit();
+            lblResultat.setText(processed + " mouvement(s) enregistré(s).");
             refreshProducts();
             refreshMouvementsList();
             resetForm();
         } catch (Exception exception) {
-            lblResultat.setText("Erreur lors du traitement");
             JOptionPane.showMessageDialog(this,
-                    "Impossible de traiter le mouvement :\n" + exception.getMessage(),
+                    "Impossible de valider les mouvements :\n" + exception.getMessage(),
                     "Erreur",
                     JOptionPane.ERROR_MESSAGE);
+            lblResultat.setText("Erreur lors de la validation");
             exception.printStackTrace();
-        }
-    }
-
-    private void modifierMouvementSelectionne() {
-        String reference = txtReference.getText().trim();
-        String notes = txtNotes.getText().trim();
-        LocalDate date = ((java.util.Date) spDate.getValue()).toInstant()
-                .atZone(java.time.ZoneId.systemDefault())
-                .toLocalDate();
-
-        try (Connection connection = DatabaseConfig.getConnection()) {
-            MouvementStockDao mouvementDao = new MouvementStockDao(connection);
-            MouvementStock mouvement = mouvementDao.findById(selectedMovementId);
-            if (mouvement == null) {
-                JOptionPane.showMessageDialog(this, "Mouvement introuvable.", "Erreur", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            mouvement.setReferenceAchat(reference);
-            mouvement.setReferenceVente(reference);
-            mouvement.setNotes(notes);
-            mouvement.setDateMouvement(date);
-            mouvementDao.update(mouvement);
-
-            lblResultat.setText("Mouvement modifié: #" + selectedMovementId);
-            refreshMouvementsList();
-            resetForm();
-        } catch (Exception exception) {
-            JOptionPane.showMessageDialog(this,
-                    "Impossible de modifier le mouvement :\n" + exception.getMessage(),
-                    "Erreur",
-                    JOptionPane.ERROR_MESSAGE);
-            exception.printStackTrace();
-        }
-    }
-
-    private BigDecimal lireBigDecimal(String text, String label) {
-        try {
-            String value = text.trim();
-            if (value.isEmpty()) {
-                throw new NumberFormatException("vide");
-            }
-            return new BigDecimal(value);
-        } catch (Exception exception) {
-            JOptionPane.showMessageDialog(this,
-                    "La " + label + " est invalide.",
-                    "Validation",
-                    JOptionPane.WARNING_MESSAGE);
-            return null;
         }
     }
 
     private void resetForm() {
-        selectedMovementId = null;
-        txtQuantite.setText("");
-        txtPrix.setText("");
-        txtReference.setText("");
-        txtNotes.setText("");
-        cmbType.setSelectedItem("ENTREE");
-        updateFieldState();
-        setEditionMode(false);
-        spDate.setValue(java.sql.Date.valueOf(LocalDate.now()));
-        if (cmbProduit.getItemCount() > 0) {
-            cmbProduit.setSelectedIndex(0);
+        mouvements.clear();
+        mouvementsContainer.removeAll();
+        ajouterMouvement();
+        mouvementsContainer.revalidate();
+        mouvementsContainer.repaint();
+    }
+
+    private void calculerPU(MouvementRowPanel row) {
+        if (!"SORTIE".equals(row.getTypeSelection())) {
+            JOptionPane.showMessageDialog(this, "Calcul PU réservé aux sorties.", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
         }
-        tablePanel.getTable().clearSelection();
+
+        Produit produit = row.getProduitSelectionne();
+        if (produit == null) {
+            JOptionPane.showMessageDialog(this, "Sélectionner un produit.", "Erreur", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        BigDecimal quantite = MouvementFormUtils.parseBigDecimal(this, row.getQuantiteText(), "quantité");
+        if (quantite == null) {
+            return;
+        }
+
+        String methode = row.getMethodeSelectionnee();
+        if ("PRODUIT".equals(methode)) {
+            methode = produit.getMethodeValorisation();
+        }
+
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            StockService service = new StockService(new ProduitDao(connection), new MouvementStockDao(connection), new LigneStockDao(connection));
+            BigDecimal total = service.estimateSortieCost(produit.getId(), quantite, methode);
+            BigDecimal pu = total.divide(quantite, 6, RoundingMode.HALF_UP);
+            row.setPrixText(pu.stripTrailingZeros().toPlainString());
+            row.setPrixEditable(false);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Impossible d'estimer PU: " + ex.getMessage(),
+                    "Erreur",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     public static void main(String[] args) {
-        javax.swing.SwingUtilities.invokeLater(() -> {
+        SwingUtilities.invokeLater(() -> {
             try {
                 new MouvementExempleApp().setVisible(true);
             } catch (Exception exception) {

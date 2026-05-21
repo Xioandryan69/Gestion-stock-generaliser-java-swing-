@@ -22,6 +22,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
@@ -32,6 +33,10 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.table.DefaultTableModel;
+import metadata.ClassInfo;
+import metadata.FieldInfo;
+import reflection.Analyzer;
+import utils.TypeUtils;
 
 
 
@@ -53,12 +58,29 @@ public class DynamicCrudPanel<T> extends JPanel {
         this.dao = new GenericDao<>(entityClass);
         this.editableFields = new ArrayList<>();
 
-        // Identifier les champs éditables (ni @IgnoredField, ni collections)
-        for (Field f : entityClass.getDeclaredFields()) {
-            if (f.isAnnotationPresent(IgnoredField.class)) continue;
-            //if (f.isAnnotationPresent(OneToMany.class)) continue; // géré à part
-            f.setAccessible(true);
-            editableFields.add(f);
+        // Utiliser l'analyseur de métadonnées pour déterminer les champs éditables
+        try {
+            ClassInfo classInfo = Analyzer.analyzeClass(entityClass);
+            if (classInfo != null && classInfo.getFields() != null) {
+                for (FieldInfo finfo : classInfo.getFields()) {
+                    if (finfo.isIgnored()) continue;
+                    try {
+                        Field f = entityClass.getDeclaredField(finfo.getNom());
+                        if (f.isAnnotationPresent(IgnoredField.class)) continue;
+                        f.setAccessible(true);
+                        editableFields.add(f);
+                    } catch (NoSuchFieldException nsf) {
+                        // Champ absent, ignorer
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            // Fallback : si l'analyse échoue, utiliser réflexion directe
+            for (Field f : entityClass.getDeclaredFields()) {
+                if (f.isAnnotationPresent(IgnoredField.class)) continue;
+                f.setAccessible(true);
+                editableFields.add(f);
+            }
         }
 
         setLayout(new BorderLayout());
@@ -163,6 +185,87 @@ public class DynamicCrudPanel<T> extends JPanel {
         }
     }
 
+    public void saveEntities(List<? extends T> entities) throws Exception {
+        if (entities == null || entities.isEmpty()) {
+            return;
+        }
+
+        dao.saveAll(entities);
+        loadTableData();
+        clearForm();
+    }
+
+    public void openBatchAddDialog() {
+        JDialog dialog = new JDialog();
+        dialog.setModal(true);
+        dialog.setTitle("Ajout multiple - " + entityClass.getSimpleName());
+        dialog.setLayout(new BorderLayout(10, 10));
+
+        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JSpinner countSpinner = new JSpinner(new SpinnerNumberModel(2, 1, 30, 1));
+        JButton btnRebuild = new JButton("Créer les lignes");
+        header.add(new JLabel("Nombre de lignes :"));
+        header.add(countSpinner);
+        header.add(btnRebuild);
+        dialog.add(header, BorderLayout.NORTH);
+
+        JPanel rowsContainer = new JPanel();
+        rowsContainer.setLayout(new javax.swing.BoxLayout(rowsContainer, javax.swing.BoxLayout.Y_AXIS));
+        JScrollPane scrollPane = new JScrollPane(rowsContainer);
+        dialog.add(scrollPane, BorderLayout.CENTER);
+
+        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JButton btnCancel = new JButton("Annuler");
+        JButton btnSaveAll = new JButton("Ajouter plusieurs");
+        footer.add(btnCancel);
+        footer.add(btnSaveAll);
+        dialog.add(footer, BorderLayout.SOUTH);
+
+        List<Map<String, JComponent>> batchEditors = new ArrayList<>();
+
+        Runnable rebuild = () -> {
+            rowsContainer.removeAll();
+            batchEditors.clear();
+            int count = ((Number) countSpinner.getValue()).intValue();
+            for (int index = 0; index < count; index++) {
+                Map<String, JComponent> editors = createBatchEditors();
+                batchEditors.add(editors);
+                rowsContainer.add(createBatchFormPanel(editors, "Ligne " + (index + 1)));
+            }
+            rowsContainer.revalidate();
+            rowsContainer.repaint();
+            dialog.pack();
+        };
+
+        btnRebuild.addActionListener(e -> rebuild.run());
+        countSpinner.addChangeListener(e -> rebuild.run());
+        btnCancel.addActionListener(e -> dialog.dispose());
+        btnSaveAll.addActionListener(e -> {
+            try {
+                List<T> entities = new ArrayList<>();
+                for (Map<String, JComponent> editors : batchEditors) {
+                    T entity = buildEntityFromEditors(editors);
+                    if (entity != null) {
+                        entities.add(entity);
+                    }
+                }
+                saveEntities(entities);
+                dialog.dispose();
+            } catch (Exception exception) {
+                JOptionPane.showMessageDialog(dialog,
+                        "Impossible d'ajouter les éléments :\n" + exception.getMessage(),
+                        "Erreur",
+                        JOptionPane.ERROR_MESSAGE);
+                exception.printStackTrace();
+            }
+        });
+
+        rebuild.run();
+        dialog.setSize(1000, 700);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
     private JComponent createEditor(Field f) {
         // Si le champ est une énumération
         if (f.getType().isEnum()) {
@@ -198,6 +301,109 @@ public class DynamicCrudPanel<T> extends JPanel {
         }
         // Sinon, champ texte simple
         return new JTextField(20);
+    }
+
+    private Map<String, JComponent> createBatchEditors() {
+        Map<String, JComponent> editors = new LinkedHashMap<>();
+        for (Field field : editableFields) {
+            if (field.isAnnotationPresent(OneToMany.class)) {
+                continue;
+            }
+            editors.put(field.getName(), createBatchEditor(field));
+        }
+        return editors;
+    }
+
+    private JPanel createBatchFormPanel(Map<String, JComponent> editors, String title) {
+        JPanel formPanel = new JPanel(new GridBagLayout());
+        formPanel.setBorder(BorderFactory.createTitledBorder(title));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 6, 4, 6);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        int row = 0;
+        for (Field field : editableFields) {
+            if (field.isAnnotationPresent(OneToMany.class)) {
+                continue;
+            }
+
+            JComponent editor = editors.get(field.getName());
+            if (editor == null) {
+                continue;
+            }
+
+            gbc.gridx = 0;
+            gbc.gridy = row;
+            formPanel.add(new JLabel(field.getName() + ":"), gbc);
+
+            gbc.gridx = 1;
+            formPanel.add(editor, gbc);
+            row++;
+        }
+
+        return formPanel;
+    }
+
+    private JComponent createBatchEditor(Field f) {
+        if (f.getType().isEnum()) {
+            JComboBox<Object> combo = new JComboBox<>();
+            for (Object constant : f.getType().getEnumConstants()) {
+                combo.addItem(constant);
+            }
+            return combo;
+        }
+
+        if (f.getType().isAnnotationPresent(Table.class)) {
+            GenericDao<?> subDao = new GenericDao<>(f.getType());
+            List<?> items = subDao.findAll();
+            List<Object> comboItems = new ArrayList<>();
+            comboItems.add(null);
+            comboItems.addAll(items);
+            JComboBox<Object> combo = new JComboBox<>(comboItems.toArray());
+            combo.setRenderer(new DefaultListCellRenderer() {
+                @Override
+                public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                    if (value == null) {
+                        return super.getListCellRendererComponent(list, "(Aucune)", index, isSelected, cellHasFocus);
+                    }
+                    return super.getListCellRendererComponent(list, value.toString(), index, isSelected, cellHasFocus);
+                }
+            });
+            return combo;
+        }
+
+        return new JTextField(20);
+    }
+
+    @SuppressWarnings("unchecked")
+    private T buildEntityFromEditors(Map<String, JComponent> editors) throws Exception {
+        T entity = entityClass.getDeclaredConstructor().newInstance();
+
+        for (Field field : editableFields) {
+            if (field.isAnnotationPresent(OneToMany.class)) {
+                continue;
+            }
+
+            JComponent component = editors.get(field.getName());
+            if (component == null) {
+                continue;
+            }
+
+            Object value = getValueFromEditor(component, field);
+            if (value == null && field.isAnnotationPresent(Id.class)) {
+                continue;
+            }
+
+            field.set(entity, value);
+        }
+
+        try {
+            Method prepare = entity.getClass().getMethod("prepareForDb");
+            prepare.invoke(entity);
+        } catch (NoSuchMethodException ignored) {
+        }
+
+        return entity;
     }
 
     private void clearForm() {
@@ -473,23 +679,20 @@ private JComponent createListEditor(Field f) {
 }
 
 private JComponent createSimpleEditorForType(Class<?> type) {
-    if (type == Boolean.class || type == boolean.class) {
-        return new JCheckBox();
-    }
-    if (Number.class.isAssignableFrom(type)
-            || type == int.class || type == double.class
-            || type == float.class || type == long.class
-            || type == short.class || type == byte.class) {
-        return new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
-    }
-    if (type.isEnum()) {
+        if (TypeUtils.isBoolean(type)) {
+            return new JCheckBox();
+        }
+        if (TypeUtils.isNumeric(type)) {
+            return new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
+        }
+        if (type.isEnum()) {
         JComboBox<Object> combo = new JComboBox<>();
         for (Object constant : type.getEnumConstants()) {
             combo.addItem(constant);
         }
         return combo;
     }
-    return new JTextField(12);
+        return new JTextField(12);
 }
 
 private Object readSimpleEditorValue(JComponent editor, Class<?> targetType) {

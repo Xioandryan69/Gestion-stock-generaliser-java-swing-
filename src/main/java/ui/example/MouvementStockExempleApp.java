@@ -2,9 +2,13 @@ package ui.example;
 
 import crud.CrudRepository;
 import crud.GenericDao;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
 import java.util.List;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import modele.MouvementStock;
 import ui.DynamicCrudPanel;
@@ -18,6 +22,7 @@ public class MouvementStockExempleApp extends JFrame {
 
     private final DynamicCrudPanel<MouvementStock> crudPanel;
     private final CrudRepository<MouvementStock> MouvementStockDao;
+    private final JButton btnAjouterPlusieurs = new JButton("Ajouter plusieurs");
 
     public MouvementStockExempleApp() throws Exception {
         super("Gestion des MouvementStocks - Exemple CRUD dynamique");
@@ -51,8 +56,14 @@ public class MouvementStockExempleApp extends JFrame {
         // Enregistrement du listener auprès du formulaire
         crudPanel.addFormListener(crudListener);
 
-        // Ajout du panneau CRUD à la fenêtre
-        setContentPane(crudPanel);
+        btnAjouterPlusieurs.addActionListener(e -> crudPanel.openBatchAddDialog());
+
+        JPanel root = new JPanel(new BorderLayout(8, 8));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        toolbar.add(btnAjouterPlusieurs);
+        root.add(toolbar, BorderLayout.NORTH);
+        root.add(crudPanel, BorderLayout.CENTER);
+        setContentPane(root);
 
         // Chargement initial des données depuis la base
         refreshMouvementStocksList();
