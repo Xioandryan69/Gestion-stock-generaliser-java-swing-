@@ -3,7 +3,7 @@ package utils;
 public class TypeUtils {
     public static boolean isNumeric(Class<?> type) {
         return Number.class.isAssignableFrom(type) || type == int.class || type == double.class ||
-               type == float.class || type == long.class || type == short.class;
+               type == float.class || type == long.class || type == short.class ||type ==  Integer.class ;
     }
 
     public static boolean isTextual(Class<?> type) {

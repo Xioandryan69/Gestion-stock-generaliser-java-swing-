@@ -374,7 +374,7 @@ private void saveEntity() {
         } else if (comp instanceof JTextField textField) {
             String text = textField.getText();
             if (f.getType() == int.class || f.getType() == Integer.class) {
-                return text.isEmpty() ? 0 : Integer.parseInt(text);
+                return text.isEmpty() ? 0 : Integer.valueOf(text);
             }
             if (f.getType() == String.class) {
                 return text.isEmpty() ? null : text;
